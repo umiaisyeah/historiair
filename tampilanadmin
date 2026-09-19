@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aetra Air Tangerang - Admin Dashboard & Data Management</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase JS Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- PapaParse for CSV Parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 font-sans p-4 md:p-8">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Header Section -->
+    <header class="bg-slate-900 text-white rounded-2xl p-6 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center space-x-4">
+        <div class="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center font-extrabold text-2xl shadow-md">
+          A
+        </div>
+        <div>
+          <h1 class="text-xl font-bold">PT Aetra Air Tangerang - Portal Admin</h1>
+          <p class="text-xs text-slate-400">Manajemen Pemakaian Air, Tagihan Pelanggan & Visualisasi Analitik</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          ● Live Supabase Connected
+        </span>
+      </div>
+    </header>
+
+    <!-- Executive Summary / KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Record Data</p>
+        <h3 id="kpiTotalRecords" class="text-2xl font-extrabold text-gray-800 mt-1">0</h3>
+      </div>
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Revenue Terbayar</p>
+        <h3 id="kpiTotalPaid" class="text-2xl font-extrabold text-emerald-600 mt-1">Rp 0</h3>
+      </div>
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tagihan Belum Dibayar</p>
+        <h3 id="kpiTotalUnpaid" class="text-2xl font-extrabold text-amber-600 mt-1">Rp 0</h3>
+      </div>
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Volume Air (m³)</p>
+        <h3 id="kpiTotalVolume" class="text-2xl font-extrabold text-blue-600 mt-1">0 m³</h3>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-2">
+        <h3 class="text-base font-bold text-gray-800 mb-1">Total Volume Air per Periode (m³)</h3>
+        <p class="text-xs text-gray-500 mb-4">Grafik pemakaian air pelanggan PT Aetra Air Tangerang</p>
+        <div class="relative w-full h-64">
+          <canvas id="barChartVolume"></canvas>
+        </div>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h3 class="text-base font-bold text-gray-800 mb-1">Proporsi Status Tagihan</h3>
+        <p class="text-xs text-gray-500 mb-4">Perbandingan Nominal Lunas vs Belum Dibayar</p>
+        <div class="relative w-full h-64 flex items-center justify-center">
+          <canvas id="doughnutChartStatus"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form Section & Bulk CSV Upload -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Upload File CSV -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col justify-between">
+        <div>
+          <h3 class="text-base font-bold text-gray-800 mb-1">Upload Massal (Bulk CSV)</h3>
+          <p class="text-xs text-gray-500 mb-4">Upload data histori pelanggan dalam jumlah banyak menggunakan file CSV.</p>
+          
+          <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center bg-gray-50 hover:bg-gray-100/50 transition-colors">
+            <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVSelect(event)">
+            <label for="csvFileInput" class="cursor-pointer flex flex-col items-center">
+              <svg class="w-10 h-10 text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 0115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+              <span id="fileNameDisplay" class="text-xs font-semibold text-gray-700">Pilih File CSV</span>
+              <span class="text-[10px] text-gray-400 mt-1">Format: ID, Nama, Bulan, Periode, m3, Total, Status, TglBayar</span>
+            </label>
+          </div>
+        </div>
+
+        <button onclick="processCSVUpload()" id="btnUploadCSV" class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-all shadow-md shadow-emerald-100">
+          Proses & Sync ke Supabase
+        </button>
+      </div>
+
+      <!-- Form Manual Input -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-2">
+        <h3 class="text-base font-bold text-gray-800 mb-1">Form Input Tagihan Manual</h3>
+        <p class="text-xs text-gray-500 mb-4">Tambah data pemakaian air baru per pelanggan secara manual</p>
+        
+        <form id="formInputManual" onsubmit="handleManualSubmit(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">ID Pelanggan</label>
+            <input type="text" id="inpNoPel" required placeholder="PLG-12345" class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Nama Pelanggan</label>
+            <input type="text" id="inpNama" required placeholder="Budi Santoso" class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Bulan/Tahun Display</label>
+            <input type="text" id="inpBulanTahun" required placeholder="Agustus 2026" class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Periode (YYYY-MM-DD)</label>
+            <input type="date" id="inpPeriodeDate" required class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Pemakaian Air (m³)</label>
+            <input type="number" id="inpPemakaian" required min="0" placeholder="25" class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Total Tagihan (Rp)</label>
+            <input type="number" id="inpTotalTagihan" required min="0" placeholder="125000" class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Status Pembayaran</label>
+            <select id="inpStatus" class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+              <option value="Belum Dibayar">Belum Dibayar</option>
+              <option value="Sudah Dibayar">Sudah Dibayar</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Bayar (Opsional)</label>
+            <input type="text" id="inpTglBayar" placeholder="2026-08-10 atau -" class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div class="sm:col-span-2 text-right">
+            <button type="submit" id="btnSubmitManual" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-6 py-2.5 rounded-xl shadow-md shadow-blue-200 transition-all">
+              Simpan Data Tagihan
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Master Data Table Section -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <h3 class="text-base font-bold text-gray-800">Database Tagihan Pelanggan (Supabase Table)</h3>
+        <input type="text" id="searchTable" onkeyup="filterTable()" placeholder="Cari Nama / ID Pelanggan..." class="border rounded-xl px-3 py-2 text-xs w-full sm:w-64 focus:ring-2 focus:ring-blue-500 outline-none">
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-semibold border-b">
+              <th class="p-3">ID Pelanggan</th>
+              <th class="p-3">Nama</th>
+              <th class="p-3">Bulan/Tahun</th>
+              <th class="p-3">Pemakaian (m³)</th>
+              <th class="p-3">Total Tagihan</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="masterTableBody" class="divide-y text-xs text-gray-700">
+            <!-- Data dimasukkan via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // CONFIG SUPABASE (Sesuaikan dengan Project Settings > API Supabase Anda)
+    // =========================================================================
+    const SUPABASE_URL = "https://gjfkulhavzpffnpvfmel.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqZmt1bGhhdnpwZmZucHZmbWVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3ODc5NjQsImV4cCI6MjEwNTM2Mzk2NH0.jfVgsZSy6Kk2NPkBvIOttLee-cIKd8yem9PxqpxyT_o";
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let globalData = [];
+    let barChartInstance = null;
+    let doughnutChartInstance = null;
+    let selectedCSVFile = null;
+
+    // Load data awal saat halaman pertama kali dibuka
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchMasterData();
+    });
+
+    async function fetchMasterData() {
+      try {
+        const { data, error } = await supabase
+          .from('tagihan_air')
+          .select('*')
+          .order('periode_date', { ascending: false });
+
+        if (error) throw error;
+
+        globalData = data || [];
+        updateKPIs();
+        renderTable(globalData);
+        renderCharts(globalData);
+
+      } catch (err) {
+        console.error("Gagal mengambil data master:", err);
+      }
+    }
+
+    function updateKPIs() {
+      document.getElementById('kpiTotalRecords').innerText = globalData.length;
+
+      const totalPaid = globalData
+        .filter(d => d.status === 'Sudah Dibayar')
+        .reduce((sum, d) => sum + Number(d.total_tagihan), 0);
+
+      const totalUnpaid = globalData
+        .filter(d => d.status === 'Belum Dibayar')
+        .reduce((sum, d) => sum + Number(d.total_tagihan), 0);
+
+      const totalVol = globalData
+        .reduce((sum, d) => sum + Number(d.pemakaian_m3), 0);
+
+      document.getElementById('kpiTotalPaid').innerText = `Rp ${totalPaid.toLocaleString('id-ID')}`;
+      document.getElementById('kpiTotalUnpaid').innerText = `Rp ${totalUnpaid.toLocaleString('id-ID')}`;
+      document.getElementById('kpiTotalVolume').innerText = `${totalVol.toLocaleString('id-ID')} m³`;
+    }
+
+    function renderTable(dataList) {
+      const tbody = document.getElementById('masterTableBody');
+      tbody.innerHTML = '';
+
+      if (dataList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">Belum ada data tersedia.</td></tr>`;
+        return;
+      }
+
+      dataList.forEach(item => {
+        const badgeClass = item.status === 'Sudah Dibayar' 
+          ? 'bg-emerald-50 text-emerald-700' 
+          : 'bg-amber-50 text-amber-700';
+
+        const row = `
+          <tr class="hover:bg-gray-50">
+            <td class="p-3 font-mono font-semibold">${item.nomor_pelanggan}</td>
+            <td class="p-3 font-medium">${item.nama_pelanggan}</td>
+            <td class="p-3">${item.bulan_tahun}</td>
+            <td class="p-3 font-bold text-blue-600">${item.pemakaian_m3} m³</td>
+            <td class="p-3">Rp ${Number(item.total_tagihan).toLocaleString('id-ID')}</td>
+            <td class="p-3"><span class="px-2 py-1 rounded-full text-[10px] font-bold ${badgeClass}">${item.status}</span></td>
+            <td class="p-3">
+              <button onclick="deleteRecord(${item.id})" class="text-red-500 hover:text-red-700 font-medium text-xs">Hapus</button>
+            </td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+    }
+
+    function renderCharts(dataList) {
+      // 1. Group Volume Water by Month
+      const monthMap = {};
+      dataList.forEach(d => {
+        monthMap[d.bulan_tahun] = (monthMap[d.bulan_tahun] || 0) + Number(d.pemakaian_m3);
+      });
+
+      const months = Object.keys(monthMap).reverse();
+      const volumes = months.map(m => monthMap[m]);
+
+      // Render Bar Chart
+      const ctxBar = document.getElementById('barChartVolume').getContext('2d');
+      if (barChartInstance) barChartInstance.destroy();
+      
+      barChartInstance = new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+          labels: months,
+          datasets: [{
+            label: 'Total Volume Air (m³)',
+            data: volumes,
+            backgroundColor: 'rgba(37, 99, 235, 0.75)',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+
+      // 2. Status Doughnut Chart
+      const paidSum = dataList.filter(d => d.status === 'Sudah Dibayar').reduce((a, b) => a + Number(b.total_tagihan), 0);
+      const unpaidSum = dataList.filter(d => d.status === 'Belum Dibayar').reduce((a, b) => a + Number(b.total_tagihan), 0);
+
+      const ctxDoughnut = document.getElementById('doughnutChartStatus').getContext('2d');
+      if (doughnutChartInstance) doughnutChartInstance.destroy();
+
+      doughnutChartInstance = new Chart(ctxDoughnut, {
+        type: 'doughnut',
+        data: {
+          labels: ['Terbayar (Lunas)', 'Belum Dibayar'],
+          datasets: [{
+            data: [paidSum, unpaidSum],
+            backgroundColor: ['#10B981', '#F59E0B']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' }
+          }
+        }
+      });
+    }
+
+    // Single Manual Form Submit
+    async function handleManualSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmitManual');
+      btn.disabled = true;
+      btn.innerText = "Menyimpan...";
+
+      const newRecord = {
+        nomor_pelanggan: document.getElementById('inpNoPel').value.trim(),
+        nama_pelanggan: document.getElementById('inpNama').value.trim(),
+        bulan_tahun: document.getElementById('inpBulanTahun').value.trim(),
+        periode_date: document.getElementById('inpPeriodeDate').value,
+        pemakaian_m3: parseInt(document.getElementById('inpPemakaian').value),
+        total_tagihan: parseFloat(document.getElementById('inpTotalTagihan').value),
+        status: document.getElementById('inpStatus').value,
+        tanggal_bayar: document.getElementById('inpTglBayar').value.trim() || '-'
+      };
+
+      try {
+        const { error } = await supabase.from('tagihan_air').insert([newRecord]);
+        if (error) throw error;
+
+        alert("Data tagihan berhasil ditambahkan!");
+        document.getElementById('formInputManual').reset();
+        fetchMasterData();
+      } catch (err) {
+        alert("Gagal menambahkan data: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Simpan Data Tagihan";
+      }
+    }
+
+    // CSV File Select & Bulk Upload
+    function handleCSVSelect(e) {
+      selectedCSVFile = e.target.files[0];
+      if (selectedCSVFile) {
+        document.getElementById('fileNameDisplay').innerText = selectedCSVFile.name;
+      }
+    }
+
+    function processCSVUpload() {
+      if (!selectedCSVFile) return alert("Pilih file CSV terlebih dahulu!");
+
+      Papa.parse(selectedCSVFile, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async function(results) {
+          const rows = results.data;
+          const recordsToInsert = rows.map(r => ({
+            nomor_pelanggan: r.nomor_pelanggan || r['ID Pelanggan'],
+            nama_pelanggan: r.nama_pelanggan || r['Nama Pelanggan'],
+            bulan_tahun: r.bulan_tahun || r['Bulan/Tahun'],
+            periode_date: r.periode_date || r['Periode'],
+            pemakaian_m3: parseInt(r.pemakaian_m3 || r['Pemakaian (m³)']),
+            total_tagihan: parseFloat(r.total_tagihan || r['Total Tagihan (Rp)']),
+            status: r.status || r['Status Pembayaran'],
+            tanggal_bayar: r.tanggal_bayar || r['Tanggal Bayar'] || '-'
+          }));
+
+          try {
+            const { error } = await supabase.from('tagihan_air').insert(recordsToInsert);
+            if (error) throw error;
+
+            alert(`Berhasil mengunggah ${recordsToInsert.length} data tagihan ke Supabase!`);
+            fetchMasterData();
+          } catch (err) {
+            alert("Gagal upload CSV: " + err.message);
+          }
+        }
+      });
+    }
+
+    // Delete Record
+    async function deleteRecord(id) {
+      if (!confirm("Apakah Anda yakin ingin menghapus data tagihan ini?")) return;
+
+      try {
+        const { error } = await supabase.from('tagihan_air').delete().eq('id', id);
+        if (error) throw error;
+        
+        fetchMasterData();
+      } catch (err) {
+        alert("Gagal menghapus data: " + err.message);
+      }
+    }
+
+    // Filter Table
+    function filterTable() {
+      const q = document.getElementById('searchTable').value.toLowerCase();
+      const filtered = globalData.filter(d => 
+        d.nomor_pelanggan.toLowerCase().includes(q) || 
+        d.nama_pelanggan.toLowerCase().includes(q)
+      );
+      renderTable(filtered);
+    }
+  </script>
+</body>
+</html>
